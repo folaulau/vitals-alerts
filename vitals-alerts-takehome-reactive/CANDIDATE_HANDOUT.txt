@@ -1,0 +1,55 @@
+Candidate Handout – Vitals → Alerts (1–2 hrs, Project Reactor)
+
+Goal
+Build two Spring Boot 3.5.4 (Java 21) reactive microservices using Spring WebFlux and Project Reactor that communicate over REST.
+
+1. Vitals Service (port 8081)
+   Receives a patient vital reading, stores it in memory, and sends it asynchronously to the Alerts Service.
+
+2. Alerts Service (port 8082)
+   Evaluates readings against threshold rules, stores alerts in memory, and exposes them via an API.
+
+Tech Requirements
+- Java 21
+- Spring Boot 3.5.4
+- Spring WebFlux (must use Project Reactor types: Mono, Flux)
+- WebClient for service-to-service calls
+- In-memory storage (ConcurrentHashMap or similar)
+
+Requirements
+
+Vitals Service
+- POST /readings  (return Mono<Void> or Mono<ResponseEntity<...>>)
+  Accept a JSON vital reading.
+  Validate required fields by type:
+    BP → systolic, diastolic
+    HR → hr
+    SPO2 → spo2
+  Store reading in memory (Map keyed by readingId).
+  Idempotency: ignore duplicates by readingId.
+  Forward the reading asynchronously via WebClient POST to http://localhost:8082/evaluate.
+
+Alerts Service
+- POST /evaluate  (return Mono<Void> or Mono<ResponseEntity<...>>)
+  Apply thresholds:
+    BP: systolic ≥ 140 or diastolic ≥ 90
+    HR: < 50 or > 110
+    SPO2: < 92
+  If exceeded, create an OPEN alert in memory.
+  Ignore duplicates by readingId.
+
+- GET /alerts?patientId=…  (return Flux<Alert>)
+  Return all alerts for that patient, newest first.
+
+Mock Test Data
+Send these to Vitals /readings:
+
+[
+  { "readingId":"11111111-1111-1111-1111-111111111111", "patientId":"p-001", "type":"BP", "systolic":150, "diastolic":95, "capturedAt":"2025-08-01T12:00:00Z" },
+  { "readingId":"22222222-2222-2222-2222-222222222222", "patientId":"p-001", "type":"HR", "hr":120, "capturedAt":"2025-08-01T12:05:00Z" },
+  { "readingId":"33333333-3333-3333-3333-333333333333", "patientId":"p-001", "type":"HR", "hr":45, "capturedAt":"2025-08-01T12:10:00Z" },
+  { "readingId":"44444444-4444-4444-4444-444444444444", "patientId":"p-001", "type":"SPO2", "spo2":90, "capturedAt":"2025-08-01T12:15:00Z" },
+  { "readingId":"55555555-5555-5555-5555-555555555555", "patientId":"p-001", "type":"BP", "systolic":128, "diastolic":82, "capturedAt":"2025-08-01T12:20:00Z" }
+]
+
+Expected: readings 1–4 create alerts, reading 5 does not.
